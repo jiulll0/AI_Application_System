@@ -25,7 +25,10 @@ st.markdown('<div class="sub-title">端到端分析系统：需求驱动 -> 数�
 st.sidebar.header("👤 角色与权限管理")
 role = st.sidebar.radio("当前登录角色：", ["决策者 (Admin)", "普通浏览者 (User)"])
 
-# 根据角色显示不同的提示语
+# 初始化状态
+if "current_batch" not in st.session_state:
+    st.session_state.current_batch = "B01 (全量初始数据)"
+
 if role == "决策者 (Admin)":
     st.sidebar.success("✅ 您拥有最高权限：可发起新采集、可下载商业策划案。")
 else:
@@ -34,7 +37,6 @@ else:
 st.sidebar.markdown("---")
 st.sidebar.header("📌 需求发起与控制")
 
-# 只有 Admin 才能发起新采集
 if role == "决策者 (Admin)":
     user_query = st.sidebar.text_input("输入想挖掘的 AI 应用方向：", value="AI Agent")
     if st.sidebar.button("🚀 发起新批次采集"):
@@ -46,15 +48,22 @@ if role == "决策者 (Admin)":
             st.write("3. 正在调用大模型进行机会判别与聚类打分...")
             time.sleep(1.5)
             status.update(label="✅ 新批次分析完成！", state="complete", expanded=False)
-        st.success("批次 B02 已生成！请在下方切换查看。")
+        
+        st.success("批次 B02 已生成！")
+        st.session_state.current_batch = "B02 (最新生成批次)"  # 自动切到新批次
+        time.sleep(0.5)
+        st.rerun() # 强制刷新页面
 else:
     st.sidebar.warning("⚠️ 普通浏览者无权发起新需求采集。")
 
-# 多批次下拉菜单
 st.sidebar.markdown("---")
-selected_batch = st.sidebar.selectbox("📂 切换分析批次：", ["B01 (全量初始数据)", "B02 (最新生成批次)"])
-
-# ================= 3. 读取多批次数据 =================
+batch_options = ["B01 (全量初始数据)", "B02 (最新生成批次)"]
+selected_batch = st.sidebar.selectbox(
+    "📂 切换分析批次：", 
+    batch_options, 
+    index=batch_options.index(st.session_state.current_batch) # 根据状态自动选中
+)
+st.session_state.current_batch = selected_batch# ================= 3. 读取多批次数据 =================
 # 这里模拟了 B01 读取本地真实结果，B02 读取另一套结果或者动态生成演示
 @st.cache_data
 def load_data(batch):
@@ -94,12 +103,15 @@ if df1 is not None:
 
     # 图表区
     col_left, col_right = st.columns([1, 1.2])
-    with col_left:
-        st.markdown("### 🌐 数据来源分布")
+        with col_left:
+        st.markdown("### 🌐 数据来源分布 (多源异构)")
         source_counts = df1['来源网站名称'].value_counts().reset_index()
         source_counts.columns = ['来源', '数量']
-        fig_pie = px.pie(source_counts, values='数量', names='来源', hole=0.5, color_discrete_sequence=px.colors.qualitative.Pastel)
-        st.plotly_chart(fig_pie, use_container_width=True)
+        # 改用横向条形图，按数量降序
+        fig_bar_source = px.bar(source_counts, x='数量', y='来源', orientation='h', 
+                                color='来源', color_discrete_sequence=px.colors.qualitative.Pastel)
+        fig_bar_source.update_layout(yaxis={'categoryorder':'total ascending'}, showlegend=False)
+        st.plotly_chart(fig_bar_source, use_container_width=True)
 
     with col_right:
         st.markdown("### 🏢 机会行业分布 TOP 10")
@@ -109,11 +121,19 @@ if df1 is not None:
         fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}, coloraxis_showscale=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-    # 排行榜
+       # 排行榜
     st.markdown("### 🏆 高价值赛道排行榜与决策推荐")
-    display_cols = ['优先级', '主题簇编号', '主题簇名称', '功能类别', '所属行业', '机会价值分']
-    st.dataframe(df4[display_cols].head(15).style.background_gradient(subset=['机会价值分'], cmap='Blues'), use_container_width=True)
-
+    st.info("💡 评分模型：多源指向度(30%) + 记录规模(40%) + 互动热度(30%)，量化筛选最具潜力的赛道。")
+    
+    display_cols = ['优先级', '主题簇名称', '功能类别', '所属行业', '机会价值分']
+    # 限制显示前10条，防止页面太长
+    df_display = df4[display_cols].head(10)
+    
+    st.dataframe(
+        df_display.style.background_gradient(subset=['机会价值分'], cmap='Blues').format(precision=2), 
+        use_container_width=True,
+        hide_index=True # 隐藏左侧多余的行号
+    )
     # ================= 5. 权限隔离：决策产出 =================
     st.markdown("---")
     st.markdown("### 📄 商业策划案生成与导出")
