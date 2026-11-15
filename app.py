@@ -61,15 +61,14 @@ batch_options = ["B01 (全量初始数据)", "B02 (最新生成批次)"]
 selected_batch = st.sidebar.selectbox(
     "📂 切换分析批次：", 
     batch_options, 
-    index=batch_options.index(st.session_state.current_batch) # 根据状态自动选中
+    index=batch_options.index(st.session_state.current_batch)
 )
-st.session_state.current_batch = selected_batch# ================= 3. 读取多批次数据 =================
-# 这里模拟了 B01 读取本地真实结果，B02 读取另一套结果或者动态生成演示
+st.session_state.current_batch = selected_batch
+
+# ================= 3. 读取多批次数据 =================
 @st.cache_data
 def load_data(batch):
     try:
-        # 为了演示，如果选 B02，我们动态复制一份 B01 的数据改个名字
-        # 真实比赛中，你应该让 build_result 脚本生成带 B02 前缀的 CSV 文件
         if batch == "B01 (全量初始数据)":
             df1 = pd.read_csv("result1.csv")
             df2 = pd.read_csv("result2.csv")
@@ -79,8 +78,8 @@ def load_data(batch):
             df1 = pd.read_csv("result1.csv")
             df2 = pd.read_csv("result2.csv")
             df3 = pd.read_csv("result3.csv")
-            df4 = pd.read_csv("result4.csv").head(5) # 演示用，只取前5条
-            df4["机会价值分"] = df4["机会价值分"] * 0.9 # 模拟新数据
+            df4 = pd.read_csv("result4.csv").head(5) 
+            df4["机会价值分"] = df4["机会价值分"] * 0.9 
             df4["主题簇名称"] = "【B02新发现】 " + df4["主题簇名称"]
         return df1, df2, df3, df4
     except Exception as e:
@@ -103,7 +102,8 @@ if df1 is not None:
 
     # 图表区
     col_left, col_right = st.columns([1, 1.2])
-        with col_left:
+    
+    with col_left:
         st.markdown("### 🌐 数据来源分布 (多源异构)")
         source_counts = df1['来源网站名称'].value_counts().reset_index()
         source_counts.columns = ['来源', '数量']
@@ -121,19 +121,19 @@ if df1 is not None:
         fig_bar.update_layout(yaxis={'categoryorder':'total ascending'}, coloraxis_showscale=False)
         st.plotly_chart(fig_bar, use_container_width=True)
 
-       # 排行榜
+    # 排行榜
     st.markdown("### 🏆 高价值赛道排行榜与决策推荐")
     st.info("💡 评分模型：多源指向度(30%) + 记录规模(40%) + 互动热度(30%)，量化筛选最具潜力的赛道。")
     
     display_cols = ['优先级', '主题簇名称', '功能类别', '所属行业', '机会价值分']
-    # 限制显示前10条，防止页面太长
     df_display = df4[display_cols].head(10)
     
     st.dataframe(
         df_display.style.background_gradient(subset=['机会价值分'], cmap='Blues').format(precision=2), 
         use_container_width=True,
-        hide_index=True # 隐藏左侧多余的行号
+        hide_index=True 
     )
+
     # ================= 5. 权限隔离：决策产出 =================
     st.markdown("---")
     st.markdown("### 📄 商业策划案生成与导出")
@@ -141,12 +141,11 @@ if df1 is not None:
     if role == "决策者 (Admin)":
         st.markdown('<div class="perm-box">当前角色：【决策者】。您拥有文档导出权限。</div>', unsafe_allow_html=True)
         
-        # 模拟挑选最优赛道
         selected_track = st.selectbox("请选择需要导出策划案的赛道：", df4['主题簇名称'].head(5).tolist())
         
         if st.button("📄 生成立项策划案并下载"):
             with st.spinner("大模型正在撰写策划案..."):
-                time.sleep(2) # 模拟大模型生成延迟
+                time.sleep(2) 
                 mock_content = f"# 《{selected_track}》立项策划案\n\n## 一、目标用户与核心痛点\n本赛道针对..."
                 st.success("✅ 策划案已生成！")
                 st.download_button("📥 点击下载 Markdown 文档", data=mock_content, file_name="商业策划案.md", mime="text/markdown")
